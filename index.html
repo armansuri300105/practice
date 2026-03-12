@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Login</title>
+</head>
+<body>
+  <h2>Assignment System - Login</h2>
+  <p id="msg" style="color:red;"></p>
+
+  <form onsubmit="handleLogin(event)">
+    <table>
+      <tr>
+        <td><label>Username:</label></td>
+        <td><input type="text" id="username" required /></td>
+      </tr>
+      <tr>
+        <td><label>Password:</label></td>
+        <td><input type="password" id="password" required /></td>
+      </tr>
+      <tr>
+        <td><label>Role:</label></td>
+        <td>
+          <select id="role">
+            <option value="student">Student</option>
+            <option value="faculty">Faculty</option>
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td></td>
+        <td><button type="submit">Login</button></td>
+      </tr>
+    </table>
+  </form>
+
+  <script>
+    if (localStorage.getItem('username')) window.location.href = '/dashboard';
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const role = document.getElementById('role').value;
+
+      const res = await fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, role })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        document.getElementById('msg').textContent = data.message;
+        return;
+      }
+
+      localStorage.setItem('username', data.username);
+      localStorage.setItem('role', data.role);
+      window.location.href = '/dashboard';
+    }
+  </script>
+</body>
+</html>

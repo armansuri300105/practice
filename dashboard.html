@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Dashboard</title>
+</head>
+<body>
+
+  <div id="header">
+    <h2>Assignment System</h2>
+    <p>Logged in as: <strong id="show-username"></strong> | Role: <strong id="show-role"></strong> | <a href="#" onclick="logout()">Logout</a></p>
+    <hr/>
+  </div>
+
+  <!-- FACULTY SECTION -->
+  <div id="faculty-section" style="display:none;">
+
+    <h3>Create Assignment</h3>
+    <p id="create-msg" style="color:green;"></p>
+    <table>
+      <tr><td>Title:</td><td><input type="text" id="a-title"/></td></tr>
+      <tr><td>Course:</td><td><input type="text" id="a-course"/></td></tr>
+      <tr><td>Due Date:</td><td><input type="date" id="a-due"/></td></tr>
+      <tr><td>Description:</td><td><textarea id="a-desc" rows="3" cols="30"></textarea></td></tr>
+      <tr><td></td><td><button onclick="createAssignment()">Create</button></td></tr>
+    </table>
+
+    <hr/>
+    <h3>All Assignments</h3>
+    <div id="faculty-assignments"></div>
+
+    <hr/>
+    <h3>All Submissions</h3>
+    <div id="all-submissions"></div>
+  </div>
+
+  <!-- STUDENT SECTION -->
+  <div id="student-section" style="display:none;">
+
+    <h3>Available Assignments</h3>
+    <div id="student-assignments"></div>
+
+    <hr/>
+    <h3>My Submissions</h3>
+    <div id="my-submissions"></div>
+  </div>
+
+  <!-- SUBMIT FORM (shown inline) -->
+  <div id="submit-section" style="display:none; border:1px solid #000; padding:10px; margin-top:10px;">
+    <h4>Submit Assignment: <span id="submit-title"></span></h4>
+    <p id="submit-msg" style="color:red;"></p>
+    <textarea id="submit-answer" rows="5" cols="40" placeholder="Write your answer..."></textarea><br/>
+    <button onclick="submitAssignment()">Submit</button>
+    <button onclick="closeSubmit()">Cancel</button>
+    <input type="hidden" id="submit-id"/>
+    <input type="hidden" id="submit-title-val"/>
+  </div>
+
+  <!-- GRADE FORM (shown inline) -->
+  <div id="grade-section" style="display:none; border:1px solid #000; padding:10px; margin-top:10px;">
+    <h4>Grade Submission</h4>
+    <p><strong>Student:</strong> <span id="grade-student"></span></p>
+    <p><strong>Answer:</strong> <span id="grade-answer"></span></p>
+    <p id="grade-msg" style="color:red;"></p>
+    Marks: <input type="number" id="grade-marks" min="0" max="100"/><br/>
+    Comment: <input type="text" id="grade-comment" size="40"/><br/><br/>
+    <button onclick="gradeSubmission()">Save Grade</button>
+    <button onclick="closeGrade()">Cancel</button>
+    <input type="hidden" id="grade-sub-id"/>
+  </div>
+
+  <script>
+    const username = localStorage.getItem('username');
+    const role = localStorage.getItem('role');
+    if (!username) window.location.href = '/';
+
+    document.getElementById('show-username').textContent = username;
+    document.getElementById('show-role').textContent = role;
+
+    if (role === 'faculty') {
+      document.getElementById('faculty-section').style.display = 'block';
+      loadFacultyAssignments();
+      loadAllSubmissions();
+    } else {
+      document.getElementById('student-section').style.display = 'block';
+      loadStudentAssignments();
+      loadMySubmissions();
+    }
+
+    function logout() {
+      localStorage.clear();
+      window.location.href = '/';
+    }
+
+    // ── Create Assignment ──
+    async function createAssignment() {
+      const title = document.getElementById('a-title').value.trim();
+      const course = document.getElementById('a-course').value.trim();
+      const due_date = document.getElementById('a-due').value;
+      const description = document.getElementById('a-desc').value.trim();
+      if (!title || !course || !due_date || !description) {
+        document.getElementById('create-msg').style.color = 'red';
+        document.getElementById('create-msg').textContent = 'All fields required';
+        return;
+      }
+      const res = await fetch('/assignment/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, course, due_date, description, created_by: username })
+      });
+      const data = await res.json();
+      document.getElementById('create-msg').style.color = 'green';
+      document.getElementById('create-msg').textContent = data.message;
+      document.getElementById('a-title').value = '';
+      document.getElementById('a-course').value = '';
+      document.getElementById('a-due').value = '';
+      document.getElementById('a-desc').value = '';
+      loadFacultyAssignments();
+    }
+
+    // ── Load Assignments (Faculty) ──
+    async function loadFacultyAssignments() {
+      const res = await fetch('/assignments');
+      const data = await res.json();
+      const div = document.getElementById('faculty-assignments');
+      if (!data.length) { div.innerHTML = '<p>No assignments yet.</p>'; return; }
+      let html = '<table border="1" cellpadding="5"><tr><th>Title</th><th>Course</th><th>Due Date</th><th>Description</th></tr>';
+      data.forEach(a => {
+        html += `<tr><td>${a.title}</td><td>${a.course}</td><td>${a.due_date}</td><td>${a.description}</td></tr>`;
+      });
+      html += '</table>';
+      div.innerHTML = html;
+    }
+
+    // ── Load All Submissions (Faculty) ──
+    async function loadAllSubmissions() {
+      const res = await fetch('/submissions');
+      const data = await res.json();
+      const div = document.getElementById('all-submissions');
+      if (!data.length) { div.innerHTML = '<p>No submissions yet.</p>'; return; }
+      let html = '<table border="1" cellpadding="5"><tr><th>Student</th><th>Assignment</th><th>Date</th><th>Status</th><th>Marks</th><th>Comment</th><th>Action</th></tr>';
+      data.forEach(s => {
+        html += `<tr>
+          <td>${s.student_name}</td>
+          <td>${s.assignment_title}</td>
+          <td>${s.submission_date}</td>
+          <td>${s.status}</td>
+          <td>${s.marks !== null ? s.marks : '-'}</td>
+          <td>${s.comment || '-'}</td>
+          <td><button onclick="openGrade('${s._id}','${s.student_name}',\`${s.answer.replace(/`/g,'\\`')}\`)">Grade</button></td>
+        </tr>`;
+      });
+      html += '</table>';
+      div.innerHTML = html;
+    }
+
+    // ── Load Assignments (Student) ──
+    async function loadStudentAssignments() {
+      const res = await fetch('/assignments');
+      const data = await res.json();
+      const div = document.getElementById('student-assignments');
+      if (!data.length) { div.innerHTML = '<p>No assignments available.</p>'; return; }
+      let html = '<table border="1" cellpadding="5"><tr><th>Title</th><th>Course</th><th>Due Date</th><th>Description</th><th>Action</th></tr>';
+      data.forEach(a => {
+        html += `<tr>
+          <td>${a.title}</td>
+          <td>${a.course}</td>
+          <td>${a.due_date}</td>
+          <td>${a.description}</td>
+          <td><button onclick="openSubmit('${a._id}','${a.title.replace(/'/g,"\\'")}')">Submit</button></td>
+        </tr>`;
+      });
+      html += '</table>';
+      div.innerHTML = html;
+    }
+
+    // ── Load My Submissions (Student) ──
+    async function loadMySubmissions() {
+      const res = await fetch('/submissions?student=' + username);
+      const data = await res.json();
+      const div = document.getElementById('my-submissions');
+      if (!data.length) { div.innerHTML = '<p>No submissions yet.</p>'; return; }
+      let html = '<table border="1" cellpadding="5"><tr><th>Assignment</th><th>Date</th><th>Status</th><th>Marks</th><th>Comment</th></tr>';
+      data.forEach(s => {
+        html += `<tr>
+          <td>${s.assignment_title}</td>
+          <td>${s.submission_date}</td>
+          <td>${s.status}</td>
+          <td>${s.marks !== null ? s.marks : '-'}</td>
+          <td>${s.comment || '-'}</td>
+        </tr>`;
+      });
+      html += '</table>';
+      div.innerHTML = html;
+    }
+
+    // ── Submit ──
+    function openSubmit(id, title) {
+      document.getElementById('submit-id').value = id;
+      document.getElementById('submit-title-val').value = title;
+      document.getElementById('submit-title').textContent = title;
+      document.getElementById('submit-answer').value = '';
+      document.getElementById('submit-msg').textContent = '';
+      document.getElementById('submit-section').style.display = 'block';
+    }
+    function closeSubmit() {
+      document.getElementById('submit-section').style.display = 'none';
+    }
+    async function submitAssignment() {
+      const answer = document.getElementById('submit-answer').value.trim();
+      if (!answer) { document.getElementById('submit-msg').textContent = 'Answer required'; return; }
+      const res = await fetch('/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_name: username,
+          assignment_id: document.getElementById('submit-id').value,
+          assignment_title: document.getElementById('submit-title-val').value,
+          answer
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) { document.getElementById('submit-msg').textContent = data.message; return; }
+      closeSubmit();
+      loadMySubmissions();
+    }
+
+    // ── Grade ──
+    function openGrade(id, student, answer) {
+      document.getElementById('grade-sub-id').value = id;
+      document.getElementById('grade-student').textContent = student;
+      document.getElementById('grade-answer').textContent = answer;
+      document.getElementById('grade-marks').value = '';
+      document.getElementById('grade-comment').value = '';
+      document.getElementById('grade-msg').textContent = '';
+      document.getElementById('grade-section').style.display = 'block';
+    }
+    function closeGrade() {
+      document.getElementById('grade-section').style.display = 'none';
+    }
+    async function gradeSubmission() {
+      const marks = document.getElementById('grade-marks').value;
+      const comment = document.getElementById('grade-comment').value;
+      if (!marks) { document.getElementById('grade-msg').textContent = 'Marks required'; return; }
+      const res = await fetch('/grade/' + document.getElementById('grade-sub-id').value, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ marks: parseInt(marks), comment })
+      });
+      const data = await res.json();
+      if (!res.ok) { document.getElementById('grade-msg').textContent = data.message; return; }
+      closeGrade();
+      loadAllSubmissions();
+    }
+  </script>
+</body>
+</html>
